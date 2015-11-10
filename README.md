@@ -1,1 +1,1 @@
-# check-partitions-alignment
+a bash script to check correct partitions alignment
