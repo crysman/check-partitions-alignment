@@ -22,7 +22,8 @@ echo "$tableheader"
 echo "$tabledata" | column -ts '|'
 #                   ^make table out of it using the "|" separator created in awk
 
-notdivisible=#null
+notdivisible=
+#            ^null
 notdivisible=`echo "$tabledata" | grep '[0-9]*\.[0-9e+]*'`
 #                                 ^searching for decimal number
 
@@ -33,5 +34,19 @@ test -n "$notdivisible" && {
   echo "* on color terminals printed in color"
 } || {
   echo ""
-  echo "lucky You, everything OK! ;)"
+  echo "OK! everything divisible by $divisor"
+}
+
+echo ""
+echo "what does the parted utility say about the partitions alignment?"
+partitions=`echo "$fdiskoutput" | grep -Eo "$1[0-9]+" | grep -Eo "[0-9]+$"`
+partederror=
+#           ^null
+for i in ${partitions}; do
+  sudo parted "$1" align-check opt $i || partederror=true
+done
+test "$partederror" = "true" && {
+  echo "ERROR - see above"
+} || {
+  echo "OK!"
 }
