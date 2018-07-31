@@ -1,8 +1,9 @@
 #!/bin/bash
 # check correct partitions alignment
-# crysman (copyleft) 2015
+# crysman (copyleft) 2015-2018
 
-# chengelog
+# changelog
+# 1.2  working with B in parted directly, checking alignment like this: START(B) and END(B)+1 divided by $divisor
 # 1.1  changed to divisor 4096 because of the SSD disk
 #      added sectorunit (fdisk's output is in sectors)
 
@@ -12,39 +13,11 @@ echo "$1" | grep '/dev' >/dev/null || {
   exit 2
 }
 
-divisor=4096 #my ADATA SSD disk uses 4K units
-# ^value to divide with
+sudo parted "$1" print >/dev/null || exit $?
+partedoutput=`sudo parted "$1" unit B print`
 
-fdiskoutput=`sudo fdisk -l "$1"`
-sectorunit=`echo "$fdiskoutput" | grep "Units:" | cut -d "=" -f 2 | grep -oE "[[:digit:]]+"`
-tableheader=`echo "$fdiskoutput" | grep "^Device" | sed 's~[[:blank:]]Boot~~'`
-#                                  ^ only the header line  ^ without "Boot"
-tabledata=`echo "$fdiskoutput" | grep -E "^$1|^Device" | sed 's~[[:blank:]]*Boot~~' | tr '*' ' ' | awk -v div="$divisor" -v su="$sectorunit" '/^\/dev/{printf "%s | %s -> %s | %s (+%s)-> %s | %s -> %s\n",$1,$2*su,$2*su/div,$3*su,su,($3+1)*su/div,$4*su,$4/div}'`
-#                                ^without header line   ^without "Boot"             ^without *     ^parse the table with awk
-# we multiply sectors*sector_unit_size in order to get bytes (equivalent to "parted unit B")
-
-echo "$tableheader"
-echo "$tabledata" | column -ts '|'
-#                   ^make table out of it using the "|" separator created in awk
-
-notdivisible=
-#            ^null
-notdivisible=`echo "$tabledata" | grep '[0-9]*\.[0-9e+]*'`
-#                                 ^searching for decimal number
-
-test -n "$notdivisible" && {
-  echo ""
-  echo "not divisible by ${divisor}*:"
-  echo "$notdivisible" | column -ts '|' | grep --color '[0-9]*\.[0-9e+]*'
-  echo "* on color terminals printed in color"
-} || {
-  echo ""
-  echo "OK! everything divisible by $divisor"
-}
-
-echo ""
-echo "what does the parted utility say about the partitions alignment?"
-partitions=`echo "$fdiskoutput" | grep -Eo "$1[0-9]+" | grep -Eo "[0-9]+$"`
+echo "what does the parted utility say about $1 partitions alignment?"
+partitions=`echo "$partedoutput" | grep -oE "^[[:blank:]]*[0-9]+"`
 partederror=
 #           ^null
 for i in ${partitions}; do
@@ -53,5 +26,35 @@ done
 test "$partederror" = "true" && {
   echo "ERROR - see above"
 } || {
-  echo "OK!"
+  echo "OK, seems to be all right, but..."
+}
+
+
+divisor=4096 #my ADATA SSD disk uses 4K units
+# ^value to divide with
+
+echo "let's check manually alignment to ${divisor}B (necessary in case of SSD HDD):"
+tableheader=`echo "$partedoutput" | grep -E "^Number[[:blank:]]+" | sed s~Type.*~~`
+# partition Start should be divisible by 4096
+# partition End+1 should be divisible by 4096
+tabledata=`echo "$partedoutput" | grep -E "^[[:blank:]]*[[:digit:]]+" | tr 'B' ' ' | awk -v div="$divisor" '{printf "%s | %s %% %s = %s | %s(+1) %% %s = %s | %s %% %s = %s\n",
+          $1,  $2,  div,$2%div,$3,   div,($3+1)%div,$4, div,  $4%div}'`
+echo "$tableheader"
+echo "$tabledata" | column -ts '|'
+#                   ^make table out of it using the "|" separator created in awk
+
+
+notdivisible=
+#            ^null
+notdivisible=`echo "$tabledata" | grep -E '= [1-9]'`
+#                                 ^searching for non 0
+
+test -n "$notdivisible" && {
+  echo ""
+  echo "WARNING: not divisible by ${divisor}*:"
+  echo "$notdivisible" | column -ts '|' | grep -E --color '= [1-9]+'
+  echo "* on color terminals printed in color"
+} || {
+  echo ""
+  echo "OK, everything divisible by ${divisor}, lucky you! :)"
 }
