@@ -1,8 +1,9 @@
 #!/bin/bash
 # check correct partitions alignment
-# crysman (copyleft) 2015-2018
+# crysman (copyleft) 2015-2023
 
 # changelog
+# 1.21 lsblk added in case of not specifying the device, some why info added
 # 1.2  working with B in parted directly, checking alignment like this: START(B) and END(B)+1 divided by $divisor
 # 1.1  changed to divisor 4096 because of the SSD disk
 #      added sectorunit (fdisk's output is in sectors)
@@ -10,6 +11,8 @@
 echo "$1" | grep '/dev' >/dev/null || {
   echo "ERR: no device specified" >&2
   echo "usage: `basename $0` /dev/sdX" >&2
+  echo "INFO: for your convenience, invoking 'lsblk'..."
+  which lsblk >/dev/null && lsblk
   exit 2
 }
 
@@ -54,6 +57,7 @@ test -n "$notdivisible" && {
   echo "WARNING: not divisible by ${divisor}*:"
   echo "$notdivisible" | column -ts '|' | grep -E --color '= [1-9]+'
   echo "* on color terminals printed in color"
+  echo "INFO: why this might be a problem? https://superuser.com/questions/393914/what-is-partition-alignment-and-why-whould-i-need-it"
 } || {
   echo ""
   echo "OK, everything divisible by ${divisor}, lucky you! :)"
